@@ -951,12 +951,13 @@ void
 Char_Event(int key)
 {
 	/* console key is hardcoded, so the user can never unbind it */
+	/*
 	if ((key == '^') || (key == '~') || (key == '`'))
 	{
 		Con_ToggleConsole_f();
 		return;
 	}
-
+*/
 	switch (cls.key_dest)
 	{
 		/* Chat */
@@ -1035,6 +1036,12 @@ Key_Event(int key, qboolean down, qboolean special)
 
 	/* Toogle console though Shift + Escape */
 	if (down && keydown[K_SHIFT] && key == K_ESCAPE)
+	{
+		Con_ToggleConsole_f();
+		return;
+	}
+
+	if (down && ((key == '`') || (key == '~')))
 	{
 		Con_ToggleConsole_f();
 		return;
