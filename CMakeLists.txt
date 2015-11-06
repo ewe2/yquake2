@@ -1,18 +1,22 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 
 # Enforce "Debug" as standard build type
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
-endif(NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
+endif()
 
 # CMake project configuration
-project (yquake2)
+project(yquake2)
 
 # Cmake module search path
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/stuff/cmake/modules ${CMAKE_MODULE_PATH})
 
-if (YQUAKE2LIBS)
-	set(ENV{CMAKE_PREFIX_PATH} ${YQUAKE2LIBS})
+if(YQUAKE2LIBS)
+	if(CMAKE_CROSSCOMPILING)
+		set(CMAKE_FIND_ROOT_PATH ${YQUAKE2LIBS})
+	else()
+		set(ENV{CMAKE_PREFIX_PATH} ${YQUAKE2LIBS})
+	endif()
 
 	set(ENV{OPENALDIR} ${YQUAKE2LIBS})
 	set(ENV{SDLDIR} ${YQUAKE2LIBS})
@@ -119,10 +123,10 @@ include_directories(${yquake2IncludeDirectories})
 link_directories(${yquake2LinkerDirectories})
 
 set(Backends-Generic-Source
-	${BACKENDS_SRC_DIR}/generic/qal.c
-	${BACKENDS_SRC_DIR}/generic/vid.c
-	${BACKENDS_SRC_DIR}/generic/qgl.c
 	${BACKENDS_SRC_DIR}/generic/misc.c
+	${BACKENDS_SRC_DIR}/generic/qal.c
+	${BACKENDS_SRC_DIR}/generic/qgl.c
+	${BACKENDS_SRC_DIR}/generic/vid.c
 
 	${BACKENDS_SRC_DIR}/sdl/cd.c
 	${BACKENDS_SRC_DIR}/sdl/input.c
@@ -137,11 +141,11 @@ set(Backends-Generic-Header
 	)
 
 set(Backends-Unix-Source
-	${BACKENDS_SRC_DIR}/unix/network.c
-	${BACKENDS_SRC_DIR}/unix/system.c
 	${BACKENDS_SRC_DIR}/generic/misc.c
 	${BACKENDS_SRC_DIR}/unix/main.c
+	${BACKENDS_SRC_DIR}/unix/network.c
 	${BACKENDS_SRC_DIR}/unix/signalhandler.c
+	${BACKENDS_SRC_DIR}/unix/system.c
 	${BACKENDS_SRC_DIR}/unix/shared/hunk.c
 	)
 
@@ -151,6 +155,7 @@ set(Backends-Unix-Header
 
 set(Backends-Windows-Source
 	${BACKENDS_SRC_DIR}/generic/misc.c
+	${BACKENDS_SRC_DIR}/windows/icon.rc
 	${BACKENDS_SRC_DIR}/windows/network.c
 	${BACKENDS_SRC_DIR}/windows/system.c
 	${BACKENDS_SRC_DIR}/windows/shared/mem.c
@@ -388,7 +393,7 @@ set(Server-Source
 	)
 
 set(Server-Header
-    ${COMMON_SRC_DIR}/header/common.h
+	${COMMON_SRC_DIR}/header/common.h
 	${COMMON_SRC_DIR}/header/crc.h
 	${COMMON_SRC_DIR}/header/files.h
 	${COMMON_SRC_DIR}/header/glob.h
@@ -400,22 +405,19 @@ set(Server-Header
 	)
 
 # Build the game dynamic library
-add_library(game SHARED ${Game-Source} ${Game-Header})
+add_library(game MODULE ${Game-Source} ${Game-Header})
 set_target_properties(game PROPERTIES
-							PREFIX ""
-							LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug/baseq2
-							LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release/baseq2
-							)
+	PREFIX ""
+	LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/release/baseq2
+	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/release/baseq2
+	)
 target_link_libraries(game ${yquake2LinkerFlags})
 
 # Main Quake 2 executable
 add_executable(quake2 ${Client-Source} ${Client-Header} ${Platform-Specific-Source} ${Backends-Generic-Source} ${Backends-Generic-Header})
 set_target_properties(quake2 PROPERTIES
-							PREFIX ""
-							RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug
-							RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release
-							)
-
+	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/release
+	)
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	target_link_libraries(quake2 ${yquake2LinkerFlags} ws2_32 winmm)
 else()
@@ -425,14 +427,11 @@ endif()
 # Quake 2 Dedicated Server
 add_executable(q2ded ${Server-Source} ${Server-Header} ${Platform-Specific-Source})
 set_target_properties(q2ded PROPERTIES
-							PREFIX ""
-							COMPILE_DEFINITIONS "DEDICATED_ONLY"
-							RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug
-							RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release
-							)
-
+	COMPILE_DEFINITIONS "DEDICATED_ONLY"
+	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/release
+	)
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	target_link_libraries(q2ded game ${yquake2LinkerFlags} ws2_32 winmm)
+	target_link_libraries(q2ded ${yquake2LinkerFlags} ws2_32 winmm)
 else()
-	target_link_libraries(q2ded game ${yquake2LinkerFlags})
+	target_link_libraries(q2ded ${yquake2LinkerFlags})
 endif()
