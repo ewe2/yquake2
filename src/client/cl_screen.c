@@ -435,8 +435,8 @@ SCR_Init(void)
 	scr_graphshift = Cvar_Get("graphshift", "0", 0);
 	scr_drawall = Cvar_Get("scr_drawall", "0", 0);
 	gl_hudscale = Cvar_Get("gl_hudscale", "-1", CVAR_ARCHIVE);
-	gl_consolescale = Cvar_Get("gl_consolescale", "1", CVAR_ARCHIVE);
-	gl_menuscale = Cvar_Get("gl_menuscale", "1", CVAR_ARCHIVE);
+	gl_consolescale = Cvar_Get("gl_consolescale", "-1", CVAR_ARCHIVE);
+	gl_menuscale = Cvar_Get("gl_menuscale", "-1", CVAR_ARCHIVE);
 
 	/* register our commands */
 	Cmd_AddCommand("timerefresh", SCR_TimeRefresh_f);
@@ -1552,7 +1552,27 @@ SCR_UpdateScreen(void)
 	GLimp_EndFrame();
 }
 
-float
+static float
+SCR_ClampScale(float scale)
+{
+	float f;
+
+	f = viddef.width / 320.0f;
+	if (scale > f)
+	{
+		scale = f;
+	}
+
+	f = viddef.height / 240.0f;
+	if (scale > f)
+	{
+		scale = f;
+	}
+
+	return scale;
+}
+
+static float
 SCR_GetDefaultScale(void)
 {
 	int i = viddef.width / 640;
@@ -1597,11 +1617,11 @@ SCR_DrawCrosshair(void)
 	}
 	else
 	{
-		scale = crosshair_scale->value;
+		scale = SCR_ClampScale(crosshair_scale->value);
 	}
 
-	Draw_PicScaled(scr_vrect.x + ((scr_vrect.width - crosshair_width) >> 1),
-			scr_vrect.y + ((scr_vrect.height - crosshair_height) >> 1),
+	Draw_PicScaled(scr_vrect.x + (scr_vrect.width - crosshair_width * scale) / 2,
+			scr_vrect.y + (scr_vrect.height - crosshair_height * scale) / 2,
 			crosshair_pic, scale);
 }
 
@@ -1616,7 +1636,7 @@ SCR_GetHUDScale(void)
 	}
 	else
 	{
-		scale = gl_hudscale->value;
+		scale = SCR_ClampScale(gl_hudscale->value);
 	}
 
 	return scale;
@@ -1633,7 +1653,7 @@ SCR_GetConsoleScale(void)
 	}
 	else
 	{
-		scale = gl_consolescale->value;
+		scale = SCR_ClampScale(gl_consolescale->value);
 	}
 
 	return scale;
@@ -1650,7 +1670,7 @@ SCR_GetMenuScale(void)
 	}
 	else
 	{
-		scale = gl_menuscale->value;
+		scale = SCR_ClampScale(gl_menuscale->value);
 	}
 
 	return scale;
