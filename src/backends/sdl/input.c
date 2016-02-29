@@ -333,6 +333,7 @@ IN_Update(void)
 					break;
 				}
 #endif
+				/* fall-through */
 			case SDL_MOUSEBUTTONUP:
 				switch( event.button.button )
 				{
@@ -367,8 +368,8 @@ IN_Update(void)
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 			case SDL_TEXTINPUT:
-				if ((event.text.text[0] >= SDLK_SPACE) &&
-					 (event.text.text[0] < SDLK_DELETE))
+				if((event.text.text[0] >= ' ') &&
+				   (event.text.text[0] <= '~'))
 				{
 					Char_Event(event.text.text[0]);
 				}
@@ -384,31 +385,40 @@ IN_Update(void)
 					Char_Event(event.key.keysym.unicode);
 				}
 #endif
-
-				if ((event.key.keysym.sym >= SDLK_SPACE) &&
-					 (event.key.keysym.sym < SDLK_DELETE))
-				{
-					Key_Event(event.key.keysym.sym, true, false);
-				}
-				else
-				{
-					Key_Event(IN_TranslateSDLtoQ2Key(event.key.keysym.sym), true, true);
-				}
-
-				break;
-
+				/* fall-through */
 			case SDL_KEYUP:
+			{
+				qboolean down = (event.type == SDL_KEYDOWN);
 
-				if ((event.key.keysym.sym >= SDLK_SPACE) &&
-					 (event.key.keysym.sym < SDLK_DELETE))
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+				/* workaround for AZERTY-keyboards, which don't have 1, 2, ..., 9, 0 in first row:
+				 * always map those physical keys (scancodes) to those keycodes anyway
+				 * see also https://bugzilla.libsdl.org/show_bug.cgi?id=3188 */
+				SDL_Scancode sc = event.key.keysym.scancode;
+				if(sc >= SDL_SCANCODE_1 && sc <= SDL_SCANCODE_0)
 				{
-					Key_Event(event.key.keysym.sym, false, false);
+					/* Note that the SDL_SCANCODEs are SDL_SCANCODE_1, _2, ..., _9, SDL_SCANCODE_0
+					 * while in ASCII it's '0', '1', ..., '9' => handle 0 and 1-9 separately
+					 * (quake2 uses the ASCII values for those keys) */
+					int key = '0'; /* implicitly handles SDL_SCANCODE_0 */
+					if(sc <= SDL_SCANCODE_9)
+					{
+						key = '1' + (sc - SDL_SCANCODE_1);
+					}
+					Key_Event(key, down, false);
+				}
+				else
+#endif /* SDL2; (SDL1.2 doesn't have scancodes so nothing we can do there) */
+				   if((event.key.keysym.sym >= SDLK_SPACE) &&
+				      (event.key.keysym.sym < SDLK_DELETE))
+				{
+					Key_Event(event.key.keysym.sym, down, false);
 				}
 				else
 				{
-					Key_Event(IN_TranslateSDLtoQ2Key(event.key.keysym.sym), false, true);
+					Key_Event(IN_TranslateSDLtoQ2Key(event.key.keysym.sym), down, true);
 				}
-
+			}
 				break;
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
@@ -418,7 +428,7 @@ IN_Update(void)
 					Key_MarkAllUp();
 				}
 
-#else // SDL1.2
+#else /* SDL1.2 */
 			case SDL_ACTIVEEVENT:
 				if(event.active.gain == 0 && (event.active.state & SDL_APPINPUTFOCUS))
 				{
