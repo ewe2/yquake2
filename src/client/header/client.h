@@ -247,8 +247,9 @@ typedef struct
 extern client_static_t	cls;
 
 /* cvars */
-extern	cvar_t	*cl_stereo_separation;
-extern	cvar_t	*cl_stereo;
+extern	cvar_t	*gl_stereo_separation;
+extern	cvar_t	*gl_stereo_convergence;
+extern	cvar_t	*gl_stereo;
 extern	cvar_t	*cl_gun;
 extern	cvar_t	*cl_add_blend;
 extern	cvar_t	*cl_add_lights;
@@ -399,6 +400,7 @@ void CL_RunParticles (void);
 void CL_RunDLights (void);
 void CL_RunLightStyles (void);
 
+void CL_CalcViewValues(void);
 void CL_AddEntities (void);
 void CL_AddDLights (void);
 void CL_AddTEnts (void);
@@ -506,5 +508,6 @@ void CL_KeyInventory (int key);
 void CL_DrawInventory (void);
 
 void CL_PredictMovement (void);
+trace_t CL_PMTrace(vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end);
 
 #endif
