@@ -100,6 +100,12 @@ Sys_Milliseconds(void)
 }
 
 void
+Sys_Sleep(int msec)
+{
+	usleep((unsigned int)1000 * msec);
+}
+
+void
 Sys_Mkdir(char *path)
 {
 	mkdir(path, 0755);
@@ -480,7 +486,21 @@ Sys_GetHomeDir(void)
 void *
 Sys_GetProcAddress(void *handle, const char *sym)
 {
-	return dlsym(handle, sym);
+    if (handle == NULL)
+    {
+#ifdef RTLD_DEFAULT
+        return dlsym(RTLD_DEFAULT, sym);
+#else
+        /* POSIX suggests that this is a portable equivalent */
+        static void *global_namespace = NULL;
+
+        if (global_namespace == NULL)
+            global_namespace = dlopen(NULL, RTLD_GLOBAL|RTLD_LAZY);
+
+        return dlsym(global_namespace, sym);
+#endif
+    }
+    return dlsym(handle, sym);
 }
 
 void *

@@ -43,11 +43,11 @@ qboolean R_Upload8(byte *data, int width, int height,
 		qboolean mipmap, qboolean is_sky);
 qboolean R_Upload32(unsigned *data, int width, int height, qboolean mipmap);
 
-int gl_solid_format = 3;
-int gl_alpha_format = 4;
+int gl_solid_format = GL_RGB;
+int gl_alpha_format = GL_RGBA;
 
-int gl_tex_solid_format = 3;
-int gl_tex_alpha_format = 4;
+int gl_tex_solid_format = GL_RGB;
+int gl_tex_alpha_format = GL_RGBA;
 
 int gl_filter_min = GL_LINEAR_MIPMAP_NEAREST;
 int gl_filter_max = GL_LINEAR;
@@ -78,7 +78,7 @@ typedef struct
 } gltmode_t;
 
 gltmode_t gl_alpha_modes[] = {
-	{"default", 4},
+	{"default", GL_RGBA},
 	{"GL_RGBA", GL_RGBA},
 	{"GL_RGBA8", GL_RGBA8},
 	{"GL_RGB5_A1", GL_RGB5_A1},
@@ -89,15 +89,12 @@ gltmode_t gl_alpha_modes[] = {
 #define NUM_GL_ALPHA_MODES (sizeof(gl_alpha_modes) / sizeof(gltmode_t))
 
 gltmode_t gl_solid_modes[] = {
-	{"default", 3},
+	{"default", GL_RGB},
 	{"GL_RGB", GL_RGB},
 	{"GL_RGB8", GL_RGB8},
 	{"GL_RGB5", GL_RGB5},
 	{"GL_RGB4", GL_RGB4},
 	{"GL_R3_G3_B2", GL_R3_G3_B2},
-#ifdef GL_RGB2_EXT
-	{"GL_RGB2", GL_RGB2_EXT},
-#endif
 };
 
 #define NUM_GL_SOLID_MODES (sizeof(gl_solid_modes) / sizeof(gltmode_t))
@@ -134,7 +131,7 @@ R_SetTexturePalette(unsigned palette[256])
 	int i;
 	unsigned char temptable[768];
 
-	if (qglColorTableEXT && gl_ext_palettedtexture->value)
+	if (gl_config.palettedtexture)
 	{
 		for (i = 0; i < 256; i++)
 		{
@@ -145,64 +142,6 @@ R_SetTexturePalette(unsigned palette[256])
 
 		qglColorTableEXT(GL_SHARED_TEXTURE_PALETTE_EXT, GL_RGB,
 				256, GL_RGB, GL_UNSIGNED_BYTE, temptable);
-	}
-}
-
-void
-R_EnableMultitexture(qboolean enable)
-{
-	if (!qglActiveTextureARB)
-	{
-		return;
-	}
-
-	if (enable)
-	{
-		R_SelectTexture(GL_TEXTURE1_ARB);
-		glEnable(GL_TEXTURE_2D);
-		R_TexEnv(GL_REPLACE);
-	}
-	else
-	{
-		R_SelectTexture(GL_TEXTURE1_ARB);
-		glDisable(GL_TEXTURE_2D);
-		R_TexEnv(GL_REPLACE);
-	}
-
-	R_SelectTexture(GL_TEXTURE0_ARB);
-	R_TexEnv(GL_REPLACE);
-}
-
-void
-R_SelectTexture(GLenum texture)
-{
-	int tmu;
-
-	if (!qglActiveTextureARB)
-	{
-		return;
-	}
-
-	if (texture == GL_TEXTURE0_ARB)
-	{
-		tmu = 0;
-	}
-	else
-	{
-		tmu = 1;
-	}
-
-	if (tmu == gl_state.currenttmu)
-	{
-		return;
-	}
-
-	gl_state.currenttmu = tmu;
-
-	if (qglActiveTextureARB)
-	{
-		qglActiveTextureARB(texture);
-		qglClientActiveTextureARB(texture);
 	}
 }
 
@@ -235,29 +174,6 @@ R_Bind(int texnum)
 
 	gl_state.currenttextures[gl_state.currenttmu] = texnum;
 	glBindTexture(GL_TEXTURE_2D, texnum);
-}
-
-void
-R_MBind(GLenum target, int texnum)
-{
-	R_SelectTexture(target);
-
-	if (target == GL_TEXTURE0_ARB)
-	{
-		if (gl_state.currenttextures[0] == texnum)
-		{
-			return;
-		}
-	}
-	else
-	{
-		if (gl_state.currenttextures[1] == texnum)
-		{
-			return;
-		}
-	}
-
-	R_Bind(texnum);
 }
 
 void
@@ -667,7 +583,7 @@ R_Upload32Native(unsigned *data, int width, int height, qboolean mipmap)
 
 
 qboolean
-R_Upload32Old(unsigned *data, int width, int height, qboolean mipmap)
+R_Upload32Soft(unsigned *data, int width, int height, qboolean mipmap)
 {
 	int samples;
 	unsigned scaled[256 * 256];
@@ -753,7 +669,7 @@ R_Upload32Old(unsigned *data, int width, int height, qboolean mipmap)
 	{
 		if (!mipmap)
 		{
-			if (qglColorTableEXT && gl_ext_palettedtexture->value &&
+			if (qglColorTableEXT && gl_palettedtexture->value &&
 				(samples == gl_solid_format))
 			{
 				uploaded_paletted = true;
@@ -783,7 +699,7 @@ R_Upload32Old(unsigned *data, int width, int height, qboolean mipmap)
 
 	R_LightScaleTexture(scaled, scaled_width, scaled_height, !mipmap);
 
-	if (qglColorTableEXT && gl_ext_palettedtexture->value &&
+	if (qglColorTableEXT && gl_palettedtexture->value &&
 		(samples == gl_solid_format))
 	{
 		uploaded_paletted = true;
@@ -824,7 +740,7 @@ R_Upload32Old(unsigned *data, int width, int height, qboolean mipmap)
 
 			miplevel++;
 
-			if (qglColorTableEXT && gl_ext_palettedtexture->value &&
+			if (qglColorTableEXT && gl_palettedtexture->value &&
 				(samples == gl_solid_format))
 			{
 				uploaded_paletted = true;
@@ -852,13 +768,13 @@ R_Upload32(unsigned *data, int width, int height, qboolean mipmap)
 {
 	qboolean res;
 
-	if (gl_config.tex_npot)
+	if (gl_config.npottextures)
 	{
 		res = R_Upload32Native(data, width, height, mipmap);
 	}
 	else
 	{
-		res = R_Upload32Old(data, width, height, mipmap);
+		res = R_Upload32Soft(data, width, height, mipmap);
 	}
 
 	if (mipmap)
@@ -898,7 +814,7 @@ R_Upload8(byte *data, int width, int height, qboolean mipmap, qboolean is_sky)
 		VID_Error(ERR_DROP, "R_Upload8: too large");
 	}
 
-	if (qglColorTableEXT && gl_ext_palettedtexture->value && is_sky)
+	if (gl_config.palettedtexture && is_sky)
 	{
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_COLOR_INDEX8_EXT,
 				width, height, 0, GL_COLOR_INDEX, GL_UNSIGNED_BYTE,
@@ -1332,7 +1248,8 @@ void
 R_InitImages(void)
 {
 	int i, j;
-	float g = vid_gamma->value;
+	// use 1/gamma so higher value is brighter, to match HW gamma settings
+	float g = 1.0f/vid_gamma->value;
 
 	registration_sequence = 1;
 
@@ -1348,7 +1265,7 @@ R_InitImages(void)
 
 	Draw_GetPalette();
 
-	if (qglColorTableEXT)
+	if (gl_config.palettedtexture)
 	{
 		FS_LoadFile("pics/16to8.dat", (void **)&gl_state.d_16to8table);
 

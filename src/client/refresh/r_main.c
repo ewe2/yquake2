@@ -75,18 +75,12 @@ cvar_t *gl_drawworld;
 cvar_t *gl_speeds;
 cvar_t *gl_fullbright;
 cvar_t *gl_novis;
-cvar_t *gl_nocull;
 cvar_t *gl_lerpmodels;
 cvar_t *gl_lefthand;
 cvar_t *gl_farsee;
 
 cvar_t *gl_lightlevel;
 cvar_t *gl_overbrightbits;
-
-cvar_t *gl_nosubimage;
-cvar_t *gl_allow_software;
-
-cvar_t *gl_vertex_arrays;
 
 cvar_t *gl_particle_min_size;
 cvar_t *gl_particle_max_size;
@@ -95,14 +89,9 @@ cvar_t *gl_particle_att_a;
 cvar_t *gl_particle_att_b;
 cvar_t *gl_particle_att_c;
 
-cvar_t *gl_ext_swapinterval;
-cvar_t *gl_ext_palettedtexture;
-cvar_t *gl_ext_multitexture;
-cvar_t *gl_ext_pointparameters;
-cvar_t *gl_ext_compiled_vertex_array;
-cvar_t *gl_ext_mtexcombine;
+cvar_t *gl_palettedtexture;
+cvar_t *gl_pointparameters;
 
-cvar_t *gl_bitdepth;
 cvar_t *gl_drawbuffer;
 cvar_t *gl_lightmap;
 cvar_t *gl_shadows;
@@ -119,7 +108,6 @@ cvar_t *gl_modulate;
 cvar_t *gl_nobind;
 cvar_t *gl_round_down;
 cvar_t *gl_picmip;
-cvar_t *gl_skymip;
 cvar_t *gl_showtris;
 cvar_t *gl_ztrick;
 cvar_t *gl_zfix;
@@ -128,14 +116,12 @@ cvar_t *gl_clear;
 cvar_t *gl_cull;
 cvar_t *gl_polyblend;
 cvar_t *gl_flashblend;
-cvar_t *gl_playermip;
 cvar_t *gl_saturatelighting;
 cvar_t *gl_swapinterval;
 cvar_t *gl_texturemode;
 cvar_t *gl_texturealphamode;
 cvar_t *gl_texturesolidmode;
 cvar_t *gl_anisotropic;
-cvar_t *gl_anisotropic_avail;
 cvar_t *gl_lockpvs;
 cvar_t *gl_msaa_samples;
 
@@ -155,7 +141,7 @@ R_CullBox(vec3_t mins, vec3_t maxs)
 {
 	int i;
 
-	if (gl_nocull->value)
+	if (!gl_cull->value)
 	{
 		return false;
 	}
@@ -185,7 +171,7 @@ void
 R_DrawSpriteModel(entity_t *e)
 {
 	float alpha = 1.0F;
-	vec3_t point;
+    vec3_t point[4];
 	dsprframe_t *frame;
 	float *up, *right;
 	dsprite_t *psprite;
@@ -226,29 +212,34 @@ R_DrawSpriteModel(entity_t *e)
 		glDisable(GL_ALPHA_TEST);
 	}
 
-	glBegin(GL_QUADS);
+	GLfloat tex[] = {
+		0, 1,
+		0, 0,
+		1, 0,
+		1, 1
+	};
 
-	glTexCoord2f(0, 1);
-	VectorMA(e->origin, -frame->origin_y, up, point);
-	VectorMA(point, -frame->origin_x, right, point);
-	glVertex3fv(point);
+	VectorMA( e->origin, -frame->origin_y, up, point[0] );
+	VectorMA( point[0], -frame->origin_x, right, point[0] );
 
-	glTexCoord2f(0, 0);
-	VectorMA(e->origin, frame->height - frame->origin_y, up, point);
-	VectorMA(point, -frame->origin_x, right, point);
-	glVertex3fv(point);
+	VectorMA( e->origin, frame->height - frame->origin_y, up, point[1] );
+	VectorMA( point[1], -frame->origin_x, right, point[1] );
 
-	glTexCoord2f(1, 0);
-	VectorMA(e->origin, frame->height - frame->origin_y, up, point);
-	VectorMA(point, frame->width - frame->origin_x, right, point);
-	glVertex3fv(point);
+	VectorMA( e->origin, frame->height - frame->origin_y, up, point[2] );
+	VectorMA( point[2], frame->width - frame->origin_x, right, point[2] );
 
-	glTexCoord2f(1, 1);
-	VectorMA(e->origin, -frame->origin_y, up, point);
-	VectorMA(point, frame->width - frame->origin_x, right, point);
-	glVertex3fv(point);
+	VectorMA( e->origin, -frame->origin_y, up, point[3] );
+	VectorMA( point[3], frame->width - frame->origin_x, right, point[3] );
 
-	glEnd();
+	glEnableClientState( GL_VERTEX_ARRAY );
+	glEnableClientState( GL_TEXTURE_COORD_ARRAY );
+
+	glVertexPointer( 3, GL_FLOAT, 0, point );
+	glTexCoordPointer( 2, GL_FLOAT, 0, tex );
+	glDrawArrays( GL_TRIANGLE_FAN, 0, 4 );
+
+	glDisableClientState( GL_VERTEX_ARRAY );
+	glDisableClientState( GL_TEXTURE_COORD_ARRAY );
 
 	glDisable(GL_ALPHA_TEST);
 	R_TexEnv(GL_REPLACE);
@@ -265,7 +256,6 @@ void
 R_DrawNullModel(void)
 {
 	vec3_t shadelight;
-	int i;
 
 	if (currententity->flags & RF_FULLBRIGHT)
 	{
@@ -280,29 +270,41 @@ R_DrawNullModel(void)
 	R_RotateForEntity(currententity);
 
 	glDisable(GL_TEXTURE_2D);
-	glColor3fv(shadelight);
+	glColor4f( shadelight[0], shadelight[1], shadelight[2], 1 );
 
-	glBegin(GL_TRIANGLE_FAN);
-	glVertex3f(0, 0, -16);
+    GLfloat vtxA[] = {
+        0, 0, -16,
+        16 * cos( 0 * M_PI / 2 ), 16 * sin( 0 * M_PI / 2 ), 0,
+        16 * cos( 1 * M_PI / 2 ), 16 * sin( 1 * M_PI / 2 ), 0,
+        16 * cos( 2 * M_PI / 2 ), 16 * sin( 2 * M_PI / 2 ), 0,
+        16 * cos( 3 * M_PI / 2 ), 16 * sin( 3 * M_PI / 2 ), 0,
+        16 * cos( 4 * M_PI / 2 ), 16 * sin( 4 * M_PI / 2 ), 0
+    };
 
-	for (i = 0; i <= 4; i++)
-	{
-		glVertex3f(16 * cos(i * M_PI / 2), 16 * sin(i * M_PI / 2), 0);
-	}
+    glEnableClientState( GL_VERTEX_ARRAY );
 
-	glEnd();
+    glVertexPointer( 3, GL_FLOAT, 0, vtxA );
+    glDrawArrays( GL_TRIANGLE_FAN, 0, 6 );
 
-	glBegin(GL_TRIANGLE_FAN);
-	glVertex3f(0, 0, 16);
+    glDisableClientState( GL_VERTEX_ARRAY );
 
-	for (i = 4; i >= 0; i--)
-	{
-		glVertex3f(16 * cos(i * M_PI / 2), 16 * sin(i * M_PI / 2), 0);
-	}
+	GLfloat vtxB[] = {
+		0, 0, 16,
+		16 * cos( 4 * M_PI / 2 ), 16 * sin( 4 * M_PI / 2 ), 0,
+		16 * cos( 3 * M_PI / 2 ), 16 * sin( 3 * M_PI / 2 ), 0,
+		16 * cos( 2 * M_PI / 2 ), 16 * sin( 2 * M_PI / 2 ), 0,
+		16 * cos( 1 * M_PI / 2 ), 16 * sin( 1 * M_PI / 2 ), 0,
+		16 * cos( 0 * M_PI / 2 ), 16 * sin( 0 * M_PI / 2 ), 0
+	};
 
-	glEnd();
+	glEnableClientState( GL_VERTEX_ARRAY );
 
-	glColor3f(1, 1, 1);
+	glVertexPointer( 3, GL_FLOAT, 0, vtxB );
+	glDrawArrays( GL_TRIANGLE_FAN, 0, 6 );
+
+	glDisableClientState( GL_VERTEX_ARRAY );
+
+	glColor4f(1, 1, 1, 1);
 	glPopMatrix();
 	glEnable(GL_TEXTURE_2D);
 }
@@ -417,24 +419,31 @@ R_DrawParticles2(int num_particles, const particle_t particles[],
 	vec3_t up, right;
 	float scale;
 	byte color[4];
-
+ 
+	GLfloat vtx[3*num_particles*3];
+	GLfloat tex[2*num_particles*3];
+	GLfloat clr[4*num_particles*3];
+	unsigned int index_vtx = 0;
+	unsigned int index_tex = 0;
+	unsigned int index_clr = 0;
+	unsigned int j;
+ 
 	R_Bind(r_particletexture->texnum);
 	glDepthMask(GL_FALSE); /* no z buffering */
 	glEnable(GL_BLEND);
 	R_TexEnv(GL_MODULATE);
-	glBegin(GL_TRIANGLES);
 
-	VectorScale(vup, 1.5, up);
-	VectorScale(vright, 1.5, right);
+	VectorScale( vup, 1.5, up );
+	VectorScale( vright, 1.5, right );
 
-	for (p = particles, i = 0; i < num_particles; i++, p++)
+	for ( p = particles, i = 0; i < num_particles; i++, p++ )
 	{
 		/* hack a scale up to keep particles from disapearing */
-		scale = (p->origin[0] - r_origin[0]) * vpn[0] +
-				(p->origin[1] - r_origin[1]) * vpn[1] +
-				(p->origin[2] - r_origin[2]) * vpn[2];
+		scale = ( p->origin [ 0 ] - r_origin [ 0 ] ) * vpn [ 0 ] +
+			( p->origin [ 1 ] - r_origin [ 1 ] ) * vpn [ 1 ] +
+			( p->origin [ 2 ] - r_origin [ 2 ] ) * vpn [ 2 ];
 
-		if (scale < 20)
+		if ( scale < 20 )
 		{
 			scale = 1;
 		}
@@ -443,26 +452,54 @@ R_DrawParticles2(int num_particles, const particle_t particles[],
 			scale = 1 + scale * 0.004;
 		}
 
-		*(int *)color = colortable[p->color];
-		color[3] = p->alpha * 255;
+		*(int *) color = colortable [ p->color ];
 
-		glColor4ubv(color);
+		for (j=0; j<3; j++) // Copy the color for each point
+		{
+			clr[index_clr++] = color[0]/255.0f;
+			clr[index_clr++] = color[1]/255.0f;
+			clr[index_clr++] = color[2]/255.0f;
+			clr[index_clr++] = p->alpha;
+		}
 
-		glTexCoord2f(0.0625, 0.0625);
-		glVertex3fv(p->origin);
+		// point 0
+		tex[index_tex++] = 0.0625f;
+		tex[index_tex++] = 0.0625f;
 
-		glTexCoord2f(1.0625, 0.0625);
-		glVertex3f(p->origin[0] + up[0] * scale,
-				p->origin[1] + up[1] * scale,
-				p->origin[2] + up[2] * scale);
+		vtx[index_vtx++] = p->origin[0];
+		vtx[index_vtx++] = p->origin[1];
+		vtx[index_vtx++] = p->origin[2];
 
-		glTexCoord2f(0.0625, 1.0625);
-		glVertex3f(p->origin[0] + right[0] * scale,
-				p->origin[1] + right[1] * scale,
-				p->origin[2] + right[2] * scale);
+		// point 1
+		tex[index_tex++] = 1.0625f;
+		tex[index_tex++] = 0.0625f;
+
+		vtx[index_vtx++] = p->origin [ 0 ] + up [ 0 ] * scale;
+		vtx[index_vtx++] = p->origin [ 1 ] + up [ 1 ] * scale;
+		vtx[index_vtx++] = p->origin [ 2 ] + up [ 2 ] * scale;
+
+		// point 2
+		tex[index_tex++] = 0.0625f;
+		tex[index_tex++] = 1.0625f;
+
+		vtx[index_vtx++] = p->origin [ 0 ] + right [ 0 ] * scale;
+		vtx[index_vtx++] = p->origin [ 1 ] + right [ 1 ] * scale;
+		vtx[index_vtx++] = p->origin [ 2 ] + right [ 2 ] * scale;
 	}
 
-	glEnd();
+	glEnableClientState( GL_VERTEX_ARRAY );
+	glEnableClientState( GL_TEXTURE_COORD_ARRAY );
+	glEnableClientState( GL_COLOR_ARRAY );
+
+	glVertexPointer( 3, GL_FLOAT, 0, vtx );
+	glTexCoordPointer( 2, GL_FLOAT, 0, tex );
+	glColorPointer( 4, GL_FLOAT, 0, clr );
+	glDrawArrays( GL_TRIANGLES, 0, num_particles*3 );
+
+	glDisableClientState( GL_VERTEX_ARRAY );
+	glDisableClientState( GL_TEXTURE_COORD_ARRAY );
+	glDisableClientState( GL_COLOR_ARRAY );
+ 
 	glDisable(GL_BLEND);
 	glColor4f(1, 1, 1, 1);
 	glDepthMask(1); /* back to normal Z buffering */
@@ -475,34 +512,48 @@ R_DrawParticles(void)
 	qboolean stereo_split_tb = ((gl_state.stereo_mode == STEREO_SPLIT_VERTICAL) && gl_state.camera_separation);
 	qboolean stereo_split_lr = ((gl_state.stereo_mode == STEREO_SPLIT_HORIZONTAL) && gl_state.camera_separation);
 
-	if (gl_ext_pointparameters->value && qglPointParameterfEXT && !(stereo_split_tb || stereo_split_lr))
+	if (gl_config.pointparameters && !(stereo_split_tb || stereo_split_lr))
 	{
 		int i;
 		unsigned char color[4];
 		const particle_t *p;
-
+ 
+		GLfloat vtx[3*r_newrefdef.num_particles];
+		GLfloat clr[4*r_newrefdef.num_particles];
+		unsigned int index_vtx = 0;
+		unsigned int index_clr = 0;
+  
 		glDepthMask(GL_FALSE);
 		glEnable(GL_BLEND);
 		glDisable(GL_TEXTURE_2D);
 
 		glPointSize(LittleFloat(gl_particle_size->value));
 
-		glBegin(GL_POINTS);
-
-		for (i = 0, p = r_newrefdef.particles;
-			 i < r_newrefdef.num_particles;
-			 i++, p++)
+		for ( i = 0, p = r_newrefdef.particles; i < r_newrefdef.num_particles; i++, p++ )
 		{
-			*(int *)color = d_8to24table[p->color & 0xFF];
-			color[3] = p->alpha * 255;
-			glColor4ubv(color);
-			glVertex3fv(p->origin);
+			*(int *) color = d_8to24table [ p->color & 0xFF ];
+			clr[index_clr++] = color[0]/255.0f;
+			clr[index_clr++] = color[1]/255.0f;
+			clr[index_clr++] = color[2]/255.0f;
+			clr[index_clr++] = p->alpha;
+
+			vtx[index_vtx++] = p->origin[0];
+			vtx[index_vtx++] = p->origin[1];
+			vtx[index_vtx++] = p->origin[2];
 		}
 
-		glEnd();
+		glEnableClientState( GL_VERTEX_ARRAY );
+		glEnableClientState( GL_COLOR_ARRAY );
+
+		glVertexPointer( 3, GL_FLOAT, 0, vtx );
+		glColorPointer( 4, GL_FLOAT, 0, clr );
+		glDrawArrays( GL_POINTS, 0, r_newrefdef.num_particles );
+
+		glDisableClientState( GL_VERTEX_ARRAY );
+		glDisableClientState( GL_COLOR_ARRAY );
 
 		glDisable(GL_BLEND);
-		glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+		glColor4f( 1, 1, 1, 1 );
 		glDepthMask(GL_TRUE);
 		glEnable(GL_TEXTURE_2D);
 	}
@@ -536,15 +587,21 @@ R_PolyBlend(void)
 	glRotatef(-90, 1, 0, 0); /* put Z going up */
 	glRotatef(90, 0, 0, 1); /* put Z going up */
 
-	glColor4fv(v_blend);
+	glColor4f( v_blend[0], v_blend[1], v_blend[2], v_blend[3] );
 
-	glBegin(GL_QUADS);
+	GLfloat vtx[] = {
+		10, 100, 100,
+		10, -100, 100,
+		10, -100, -100,
+		10, 100, -100
+	};
 
-	glVertex3f(10, 100, 100);
-	glVertex3f(10, -100, 100);
-	glVertex3f(10, -100, -100);
-	glVertex3f(10, 100, -100);
-	glEnd();
+	glEnableClientState( GL_VERTEX_ARRAY );
+
+	glVertexPointer( 3, GL_FLOAT, 0, vtx );
+	glDrawArrays( GL_TRIANGLE_FAN, 0, 4 );
+
+	glDisableClientState( GL_VERTEX_ARRAY );
 
 	glDisable(GL_BLEND);
 	glEnable(GL_TEXTURE_2D);
@@ -1138,15 +1195,11 @@ R_Register(void)
 	gl_drawentities = Cvar_Get("gl_drawentities", "1", 0);
 	gl_drawworld = Cvar_Get("gl_drawworld", "1", 0);
 	gl_novis = Cvar_Get("gl_novis", "0", 0);
-	gl_nocull = Cvar_Get("gl_nocull", "0", 0);
 	gl_lerpmodels = Cvar_Get("gl_lerpmodels", "1", 0);
 	gl_speeds = Cvar_Get("gl_speeds", "0", 0);
 
 	gl_lightlevel = Cvar_Get("gl_lightlevel", "0", 0);
-	gl_overbrightbits = Cvar_Get("gl_overbrightbits", "2", CVAR_ARCHIVE);
-
-	gl_nosubimage = Cvar_Get("gl_nosubimage", "0", 0);
-	gl_allow_software = Cvar_Get("gl_allow_software", "0", 0);
+	gl_overbrightbits = Cvar_Get("gl_overbrightbits", "0", CVAR_ARCHIVE);
 
 	gl_particle_min_size = Cvar_Get("gl_particle_min_size", "2", CVAR_ARCHIVE);
 	gl_particle_max_size = Cvar_Get("gl_particle_max_size", "40", CVAR_ARCHIVE);
@@ -1156,7 +1209,6 @@ R_Register(void)
 	gl_particle_att_c = Cvar_Get("gl_particle_att_c", "0.01", CVAR_ARCHIVE);
 
 	gl_modulate = Cvar_Get("gl_modulate", "1", CVAR_ARCHIVE);
-	gl_bitdepth = Cvar_Get("gl_bitdepth", "0", 0);
 	gl_mode = Cvar_Get("gl_mode", "4", CVAR_ARCHIVE);
 	gl_lightmap = Cvar_Get("gl_lightmap", "0", 0);
 	gl_shadows = Cvar_Get("gl_shadows", "0", CVAR_ARCHIVE);
@@ -1165,7 +1217,6 @@ R_Register(void)
 	gl_nobind = Cvar_Get("gl_nobind", "0", 0);
 	gl_round_down = Cvar_Get("gl_round_down", "1", 0);
 	gl_picmip = Cvar_Get("gl_picmip", "0", 0);
-	gl_skymip = Cvar_Get("gl_skymip", "0", 0);
 	gl_showtris = Cvar_Get("gl_showtris", "0", 0);
 	gl_ztrick = Cvar_Get("gl_ztrick", "0", 0);
 	gl_zfix = Cvar_Get("gl_zfix", "0", 0);
@@ -1174,23 +1225,15 @@ R_Register(void)
 	gl_cull = Cvar_Get("gl_cull", "1", 0);
 	gl_polyblend = Cvar_Get("gl_polyblend", "1", 0);
 	gl_flashblend = Cvar_Get("gl_flashblend", "0", 0);
-	gl_playermip = Cvar_Get("gl_playermip", "0", 0);
 
 	gl_texturemode = Cvar_Get("gl_texturemode", "GL_LINEAR_MIPMAP_NEAREST", CVAR_ARCHIVE);
 	gl_texturealphamode = Cvar_Get("gl_texturealphamode", "default", CVAR_ARCHIVE);
 	gl_texturesolidmode = Cvar_Get("gl_texturesolidmode", "default", CVAR_ARCHIVE);
 	gl_anisotropic = Cvar_Get("gl_anisotropic", "0", CVAR_ARCHIVE);
-	gl_anisotropic_avail = Cvar_Get("gl_anisotropic_avail", "0", 0);
 	gl_lockpvs = Cvar_Get("gl_lockpvs", "0", 0);
 
-	gl_vertex_arrays = Cvar_Get("gl_vertex_arrays", "0", CVAR_ARCHIVE);
-
-	gl_ext_swapinterval = Cvar_Get("gl_ext_swapinterval", "1", CVAR_ARCHIVE);
-	gl_ext_palettedtexture = Cvar_Get("gl_ext_palettedtexture", "0", CVAR_ARCHIVE);
-	gl_ext_multitexture = Cvar_Get("gl_ext_multitexture", "0", CVAR_ARCHIVE);
-	gl_ext_pointparameters = Cvar_Get("gl_ext_pointparameters", "1", CVAR_ARCHIVE);
-	gl_ext_compiled_vertex_array = Cvar_Get("gl_ext_compiled_vertex_array", "1", CVAR_ARCHIVE);
-	gl_ext_mtexcombine = Cvar_Get("gl_ext_mtexcombine", "1", CVAR_ARCHIVE);
+	gl_palettedtexture = Cvar_Get("gl_palettedtexture", "0", CVAR_ARCHIVE);
+	gl_pointparameters = Cvar_Get("gl_pointparameters", "1", CVAR_ARCHIVE);
 
 	gl_drawbuffer = Cvar_Get("gl_drawbuffer", "GL_BACK", 0);
 	gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
@@ -1280,9 +1323,6 @@ R_SetMode(void)
 int
 R_Init(void *hinstance, void *hWnd)
 {
-	char renderer_buffer[1000];
-	char vendor_buffer[1000];
-	int err;
 	int j;
 	extern float r_turbsin[256];
 
@@ -1334,161 +1374,136 @@ R_Init(void *hinstance, void *hWnd)
 
 	VID_MenuInit();
 
+	// --------
+
 	/* get our various GL strings */
 	VID_Printf(PRINT_ALL, "\nOpenGL setting:\n", gl_config.vendor_string);
+
 	gl_config.vendor_string = (char *)glGetString(GL_VENDOR);
 	VID_Printf(PRINT_ALL, "GL_VENDOR: %s\n", gl_config.vendor_string);
+
 	gl_config.renderer_string = (char *)glGetString(GL_RENDERER);
 	VID_Printf(PRINT_ALL, "GL_RENDERER: %s\n", gl_config.renderer_string);
+
 	gl_config.version_string = (char *)glGetString(GL_VERSION);
 	VID_Printf(PRINT_ALL, "GL_VERSION: %s\n", gl_config.version_string);
+
 	gl_config.extensions_string = (char *)glGetString(GL_EXTENSIONS);
 	VID_Printf(PRINT_ALL, "GL_EXTENSIONS: %s\n", gl_config.extensions_string);
 
-	Q_strlcpy(renderer_buffer, gl_config.renderer_string, sizeof(renderer_buffer));
-	Q_strlwr(renderer_buffer);
+	sscanf(gl_config.version_string, "%d.%d", &gl_config.major_version, &gl_config.minor_version);
 
-	Q_strlcpy(vendor_buffer, gl_config.vendor_string, sizeof(vendor_buffer));
-	Q_strlwr(vendor_buffer);
+	if (gl_config.major_version == 1)
+	{
+		if (gl_config.minor_version < 4)
+		{
+			QGL_Shutdown();
+			VID_Printf(PRINT_ALL, "Support for OpenGL 1.4 is not available\n");
 
-	Cvar_Set("scr_drawall", "0");
-	gl_config.allow_cds = true;
+			return -1;
+		}
+	}
 
 	VID_Printf(PRINT_ALL, "\n\nProbing for OpenGL extensions:\n");
 
-	/* grab extensions */
-	if (strstr(gl_config.extensions_string, "GL_EXT_compiled_vertex_array"))
+	// ----
+
+	/* Point parameters */
+	VID_Printf(PRINT_ALL, " - Point parameters: ");
+
+	if (strstr(gl_config.extensions_string, "GL_ARB_point_parameters"))
 	{
-		VID_Printf(PRINT_ALL, "...using GL_EXT_compiled_vertex_array\n");
-		qglLockArraysEXT = ( void * ) GLimp_GetProcAddress ( "glLockArraysEXT" );
-		qglUnlockArraysEXT = ( void * ) GLimp_GetProcAddress ( "glUnlockArraysEXT" );
-	}
-	else
-	{
-		VID_Printf(PRINT_ALL, "...GL_EXT_compiled_vertex_array not found\n");
+			qglPointParameterfARB = (void (APIENTRY *)(GLenum, GLfloat))GLimp_GetProcAddress ( "glPointParameterfARB" );
+			qglPointParameterfvARB = (void (APIENTRY *)(GLenum, const GLfloat *))GLimp_GetProcAddress ( "glPointParameterfvARB" );
 	}
 
-	if (strstr(gl_config.extensions_string, "GL_EXT_point_parameters"))
+	gl_config.pointparameters = false;
+
+	if (gl_pointparameters->value)
 	{
-		if (gl_ext_pointparameters->value)
+		if (qglPointParameterfARB && qglPointParameterfvARB)
 		{
-			VID_Printf(PRINT_ALL, "...using GL_EXT_point_parameters\n");
-			qglPointParameterfEXT = (void (APIENTRY *)(GLenum, GLfloat))
-				GLimp_GetProcAddress ( "glPointParameterfEXT" );
-			qglPointParameterfvEXT = (void (APIENTRY *)(GLenum, const GLfloat *))
-				GLimp_GetProcAddress ( "glPointParameterfvEXT" );
+			gl_config.pointparameters = true;
+			VID_Printf(PRINT_ALL, "Okay\n");
 		}
 		else
 		{
-			VID_Printf(PRINT_ALL, "...ignoring GL_EXT_point_parameters\n");
+			VID_Printf(PRINT_ALL, "Failed\n");
 		}
 	}
 	else
 	{
-		VID_Printf(PRINT_ALL, "...GL_EXT_point_parameters not found\n");
+		VID_Printf(PRINT_ALL, "Disabled\n");
 	}
 
-	if (!qglColorTableEXT &&
-		strstr(gl_config.extensions_string, "GL_EXT_paletted_texture") &&
+	// ----
+
+	/* Paletted texture */
+	VID_Printf(PRINT_ALL, " - Paletted texture: ");
+
+	if (strstr(gl_config.extensions_string, "GL_EXT_paletted_texture") &&
 		strstr(gl_config.extensions_string, "GL_EXT_shared_texture_palette"))
 	{
-		if (gl_ext_palettedtexture->value)
+			qglColorTableEXT = (void (APIENTRY *)(GLenum, GLenum, GLsizei, GLenum, GLenum, const GLvoid * ))
+					GLimp_GetProcAddress ("glColorTableEXT");
+	}
+
+	gl_config.palettedtexture = false;
+
+	if (gl_palettedtexture->value)
+	{
+		if (qglColorTableEXT)
 		{
-			VID_Printf(PRINT_ALL, "...using GL_EXT_shared_texture_palette\n");
-			qglColorTableEXT =
-				(void (APIENTRY *)(GLenum, GLenum, GLsizei, GLenum, GLenum,
-						const GLvoid * ) ) GLimp_GetProcAddress ("glColorTableEXT");
+			gl_config.palettedtexture = true;
+			VID_Printf(PRINT_ALL, "Okay\n");
 		}
 		else
 		{
-			VID_Printf(PRINT_ALL, "...ignoring GL_EXT_shared_texture_palette\n");
+			VID_Printf(PRINT_ALL, "Failed\n");
 		}
 	}
 	else
 	{
-		VID_Printf(PRINT_ALL, "...GL_EXT_shared_texture_palette not found\n");
+		VID_Printf(PRINT_ALL, "Disabled\n");
 	}
 
-	if (strstr(gl_config.extensions_string, "GL_ARB_multitexture"))
-	{
-		if (gl_ext_multitexture->value)
-		{
-			VID_Printf(PRINT_ALL, "...using GL_ARB_multitexture\n");
-			qglMultiTexCoord2fARB = ( void * ) GLimp_GetProcAddress ( "glMultiTexCoord2fARB" );
-			qglActiveTextureARB = ( void * ) GLimp_GetProcAddress ( "glActiveTextureARB" );
-			qglClientActiveTextureARB = ( void * ) GLimp_GetProcAddress ( "glClientActiveTextureARB" );
-		}
-		else
-		{
-			VID_Printf(PRINT_ALL, "...ignoring GL_ARB_multitexture\n");
-		}
-	}
-	else
-	{
-		VID_Printf(PRINT_ALL, "...GL_ARB_multitexture not found\n");
-	}
+	// --------
 
-	gl_config.anisotropic = false;
+	/* Anisotropic */
+	VID_Printf(PRINT_ALL, " - Anisotropic: ");
 
 	if (strstr(gl_config.extensions_string, "GL_EXT_texture_filter_anisotropic"))
 	{
-		VID_Printf(PRINT_ALL, "...using GL_EXT_texture_filter_anisotropic\n");
 		gl_config.anisotropic = true;
 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &gl_config.max_anisotropy);
-		Cvar_SetValue("gl_anisotropic_avail", gl_config.max_anisotropy);
+
+		VID_Printf(PRINT_ALL, "%ux\n", (int)gl_config.max_anisotropy);
 	}
 	else
 	{
-		VID_Printf(PRINT_ALL, "...GL_EXT_texture_filter_anisotropic not found\n");
 		gl_config.anisotropic = false;
 		gl_config.max_anisotropy = 0.0;
-		Cvar_SetValue("gl_anisotropic_avail", 0.0);
+
+		VID_Printf(PRINT_ALL, "Failed\n");
 	}
+
+	// ----
+
+	/* Non power of two textures */
+	VID_Printf(PRINT_ALL, " - Non power of two textures: ");
 
 	if (strstr(gl_config.extensions_string, "GL_ARB_texture_non_power_of_two"))
 	{
-		VID_Printf(PRINT_ALL, "...using GL_ARB_texture_non_power_of_two\n");
-		gl_config.tex_npot = true;
-	}
-
-	gl_config.mtexcombine = false;
-
-	if (strstr(gl_config.extensions_string, "GL_ARB_texture_env_combine"))
-	{
-		if (gl_ext_mtexcombine->value)
-		{
-			VID_Printf(PRINT_ALL, "...using GL_ARB_texture_env_combine\n");
-			gl_config.mtexcombine = true;
-		}
-		else
-		{
-			VID_Printf(PRINT_ALL, "...ignoring GL_ARB_texture_env_combine\n");
-		}
+		gl_config.npottextures = true;
+		VID_Printf(PRINT_ALL, "Okay\n");
 	}
 	else
 	{
-		VID_Printf(PRINT_ALL, "...GL_ARB_texture_env_combine not found\n");
+		gl_config.npottextures = false;
+		VID_Printf(PRINT_ALL, "Failed\n");
 	}
 
-	if (!gl_config.mtexcombine)
-	{
-		if (strstr(gl_config.extensions_string, "GL_EXT_texture_env_combine"))
-		{
-			if (gl_ext_mtexcombine->value)
-			{
-				VID_Printf(PRINT_ALL, "...using GL_EXT_texture_env_combine\n");
-				gl_config.mtexcombine = true;
-			}
-			else
-			{
-				VID_Printf(PRINT_ALL, "...ignoring GL_EXT_texture_env_combine\n");
-			}
-		}
-		else
-		{
-			VID_Printf(PRINT_ALL, "...GL_EXT_texture_env_combine not found\n");
-		}
-	}
+	// ----
 
 	R_SetDefaultState();
 
@@ -1496,13 +1511,6 @@ R_Init(void *hinstance, void *hWnd)
 	Mod_Init();
 	R_InitParticleTexture();
 	Draw_InitLocal();
-
-	err = glGetError();
-
-	if (err != GL_NO_ERROR)
-	{
-		VID_Printf(PRINT_ALL, "glGetError() = 0x%x\n", err);
-	}
 
 	return true;
 }
@@ -1562,6 +1570,21 @@ R_BeginFrame(float camera_separation)
 		{
 			UpdateHardwareGamma();
 		}
+	}
+
+	// Clamp overbrightbits
+	if (gl_overbrightbits->modified)
+	{
+		if (gl_overbrightbits->value > 2 && gl_overbrightbits->value < 4)
+		{
+			Cvar_Set("gl_overbrightbits", "2");
+		}
+		else if (gl_overbrightbits->value > 4)
+		{
+			Cvar_Set("gl_overbrightbits", "4");
+		}
+
+		gl_overbrightbits->modified = false;
 	}
 
 	/* go into 2D mode */
@@ -1686,7 +1709,11 @@ R_DrawBeam(entity_t *e)
 	vec3_t direction, normalized_direction;
 	vec3_t start_points[NUM_BEAM_SEGS], end_points[NUM_BEAM_SEGS];
 	vec3_t oldorigin, origin;
-
+ 
+	GLfloat vtx[3*NUM_BEAM_SEGS*4];
+	unsigned int index_vtx = 0;
+	unsigned int pointb;
+ 
 	oldorigin[0] = e->oldorigin[0];
 	oldorigin[1] = e->oldorigin[1];
 	oldorigin[2] = e->oldorigin[2];
@@ -1729,27 +1756,35 @@ R_DrawBeam(entity_t *e)
 
 	glColor4f(r, g, b, e->alpha);
 
-	glBegin(GL_TRIANGLE_STRIP);
-
-	for (i = 0; i < NUM_BEAM_SEGS; i++)
+	for ( i = 0; i < NUM_BEAM_SEGS; i++ )
 	{
-		glVertex3fv(start_points[i]);
-		glVertex3fv(end_points[i]);
-		glVertex3fv(start_points[(i + 1) % NUM_BEAM_SEGS]);
-		glVertex3fv(end_points[(i + 1) % NUM_BEAM_SEGS]);
+		vtx[index_vtx++] = start_points [ i ][ 0 ];
+		vtx[index_vtx++] = start_points [ i ][ 1 ];
+		vtx[index_vtx++] = start_points [ i ][ 2 ];
+
+		vtx[index_vtx++] = end_points [ i ][ 0 ];
+		vtx[index_vtx++] = end_points [ i ][ 1 ];
+		vtx[index_vtx++] = end_points [ i ][ 2 ];
+
+		pointb = ( i + 1 ) % NUM_BEAM_SEGS;
+		vtx[index_vtx++] = start_points [ pointb ][ 0 ];
+		vtx[index_vtx++] = start_points [ pointb ][ 1 ];
+		vtx[index_vtx++] = start_points [ pointb ][ 2 ];
+
+		vtx[index_vtx++] = end_points [ pointb ][ 0 ];
+		vtx[index_vtx++] = end_points [ pointb ][ 1 ];
+		vtx[index_vtx++] = end_points [ pointb ][ 2 ];
 	}
 
-	glEnd();
+	glEnableClientState( GL_VERTEX_ARRAY );
+
+	glVertexPointer( 3, GL_FLOAT, 0, vtx );
+	glDrawArrays( GL_TRIANGLE_STRIP, 0, NUM_BEAM_SEGS*4 );
+
+	glDisableClientState( GL_VERTEX_ARRAY );
 
 	glEnable(GL_TEXTURE_2D);
 	glDisable(GL_BLEND);
 	glDepthMask(GL_TRUE);
 }
-
-/*void
-R_GetRefAPI(void)
-{
-	Swap_Init();
-}*/
-
 

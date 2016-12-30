@@ -67,47 +67,57 @@
 #include "../header/local.h"
 
 /*
- * When ever the savegame version
- * is changed, q2 will refuse to
- * load older savegames. This
- * should be bumped if the files
- * in tables/ are changed, otherwise
- * strange things may happen.
+ * When ever the savegame version is changed, q2 will refuse to
+ * load older savegames. This should be bumped if the files
+ * in tables/ are changed, otherwise strange things may happen.
  */
-#define SAVEGAMEVER "YQ2-1"
+#define SAVEGAMEVER "YQ2-2"
+
+#ifndef BUILD_DATE
+#define BUILD_DATE __DATE__
+#endif
 
 /*
- * This macros are used to
- * prohibit loading of savegames
- * created on other systems or
- * architectures. This will
- * crash q2 in spectacular
- * ways
+ * This macros are used to prohibit loading of savegames
+ * created on other systems or architectures. This will
+ * crash q2 in spectacular ways
+ */
+#ifndef YQ2OSTYPE
+#error YQ2OSTYPE should be defined by the build system
+#endif
+
+#ifndef YQ2ARCH
+#error YQ2ARCH should be defined by the build system
+#endif
+
+/*
+ * Older operating systen and architecture detection
+ * macros, implemented by savegame version YQ2-1.
  */
 #if defined(__APPLE__)
- #define OS "MacOS X"
+#define OSTYPE_1 "MacOS X"
 #elif defined(__FreeBSD__)
- #define OS "FreeBSD"
+#define OSTYPE_1 "FreeBSD"
 #elif defined(__OpenBSD__)
- #define OS "OpenBSD"
+#define OSTYPE_1 "OpenBSD"
 #elif defined(__linux__)
- #define OS "Linux"
+ #define OSTYPE_1 "Linux"
 #elif defined(_WIN32)
- #define OS "Windows"
+ #define OSTYPE_1 "Windows"
 #else
- #define OS "Unknown"
+ #define OSTYPE_1 "Unknown"
 #endif
 
 #if defined(__i386__)
- #define ARCH "i386"
+#define ARCH_1 "i386"
 #elif defined(__x86_64__)
- #define ARCH "amd64"
+#define ARCH_1 "amd64"
 #elif defined(__sparc__)
- #define ARCH "sparc64"
+#define ARCH_1 "sparc64"
 #elif defined(__ia64__)
- #define ARCH "ia64"
+ #define ARCH_1 "ia64"
 #else
- #define ARCH "unknown"
+ #define ARCH_1 "unknown"
 #endif
 
 /*
@@ -201,7 +211,7 @@ void
 InitGame(void)
 {
 	gi.dprintf("Game is starting up.\n");
-	gi.dprintf("Game is %s built on %s.\n", GAMEVERSION, __DATE__);
+	gi.dprintf("Game is %s built on %s.\n", GAMEVERSION, BUILD_DATE);
 
 	gun_x = gi.cvar("gun_x", "0", 0);
 	gun_y = gi.cvar("gun_y", "0", 0);
@@ -217,7 +227,7 @@ InitGame(void)
 	/* latched vars */
 	sv_cheats = gi.cvar("cheats", "0", CVAR_SERVERINFO | CVAR_LATCH);
 	gi.cvar("gamename", GAMEVERSION, CVAR_SERVERINFO | CVAR_LATCH);
-	gi.cvar("gamedate", __DATE__, CVAR_SERVERINFO | CVAR_LATCH);
+	gi.cvar("gamedate", BUILD_DATE, CVAR_SERVERINFO | CVAR_LATCH);
 	maxclients = gi.cvar("maxclients", "4", CVAR_SERVERINFO | CVAR_LATCH);
 	maxspectators = gi.cvar("maxspectators", "4", CVAR_SERVERINFO);
 	deathmatch = gi.cvar("deathmatch", "0", CVAR_LATCH);
@@ -775,10 +785,10 @@ WriteGame(const char *filename, qboolean autosave)
 	memset(str_os, 0, sizeof(str_os));
 	memset(str_arch, 0, sizeof(str_arch));
 
-	Q_strlcpy(str_ver, SAVEGAMEVER, sizeof(str_ver));
-	Q_strlcpy(str_game, GAMEVERSION, sizeof(str_game));
-	Q_strlcpy(str_os, OS, sizeof(str_os));
-	Q_strlcpy(str_arch, ARCH, sizeof(str_arch));
+	Q_strlcpy(str_ver, SAVEGAMEVER, sizeof(str_ver) - 1);
+	Q_strlcpy(str_game, GAMEVERSION, sizeof(str_game) - 1);
+	Q_strlcpy(str_os, YQ2OSTYPE, sizeof(str_os) - 1);
+	Q_strlcpy(str_arch, YQ2ARCH, sizeof(str_arch) - 1);
 
 	fwrite(str_ver, sizeof(str_ver), 1, f);
 	fwrite(str_game, sizeof(str_game), 1, f);
@@ -827,26 +837,59 @@ ReadGame(const char *filename)
 	fread(str_os, sizeof(str_os), 1, f);
 	fread(str_arch, sizeof(str_arch), 1, f);
 
-	if (strcmp(str_ver, SAVEGAMEVER))
+	if (!strcmp(str_ver, SAVEGAMEVER))
+	{
+		if (strcmp(str_game, GAMEVERSION))
+		{
+			fclose(f);
+			gi.error("Savegame from another game.so.\n");
+		}
+		else if (strcmp(str_os, YQ2OSTYPE))
+		{
+			fclose(f);
+			gi.error("Savegame from another os.\n");
+		}
+		else if (strcmp(str_arch, YQ2ARCH))
+		{
+			fclose(f);
+			gi.error("Savegame from another architecture.\n");
+		}
+	}
+	else if (!strcmp(str_ver, "YQ2-1"))
+	{
+		if (strcmp(str_game, GAMEVERSION))
+		{
+			fclose(f);
+			gi.error("Savegame from another game.so.\n");
+		}
+		else if (strcmp(str_os, OSTYPE_1))
+		{
+			fclose(f);
+			gi.error("Savegame from another os.\n");
+		}
+
+		if (!strcmp(str_os, "Windows"))
+		{
+			/* Windows was forced to i386 */
+			if (strcmp(str_arch, "i386"))
+			{
+				fclose(f);
+				gi.error("Savegame from another architecture.\n");
+			}
+		}
+		else
+		{
+			if (strcmp(str_arch, ARCH_1))
+			{
+				fclose(f);
+				gi.error("Savegame from another architecture.\n");
+			}
+		}
+	}
+	else
 	{
 		fclose(f);
 		gi.error("Savegame from an incompatible version.\n");
-	}
-	else if (strcmp(str_game, GAMEVERSION))
-	{
-		fclose(f);
-		gi.error("Savegame from an other game.so.\n");
-	}
- 	else if (strcmp(str_os, OS))
-	{
-		fclose(f);
-		gi.error("Savegame from an other os.\n");
-	}
-
- 	else if (strcmp(str_arch, ARCH))
-	{
-		fclose(f);
-		gi.error("Savegame from an other architecure.\n");
 	}
 
 	g_edicts = gi.TagMalloc(game.maxentities * sizeof(g_edicts[0]), TAG_GAME);

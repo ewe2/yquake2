@@ -423,7 +423,8 @@ IN_Update(void)
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 			case SDL_WINDOWEVENT:
-				if(event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+				if(event.window.event == SDL_WINDOWEVENT_FOCUS_LOST ||
+						event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)
 				{
 					Key_MarkAllUp();
 				}
@@ -435,6 +436,11 @@ IN_Update(void)
 					Key_MarkAllUp();
 				}
 #endif
+				break;
+
+			case SDL_QUIT:
+				Com_Quit();
+				
 				break;
 		}
 	}

@@ -53,12 +53,8 @@
  #define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
 #endif
 
-#ifndef GL_ARB_multitexture
- #define GL_TEXTURE0_ARB 0x84C0
- #define GL_TEXTURE1_ARB 0x84C1
-#endif
-
 #ifndef GL_VERSION_1_3
+ #define GL_TEXTURE0 0x84C0
  #define GL_TEXTURE1 0x84C1
 #endif
 
@@ -80,8 +76,6 @@
 #define REF_VERSION "Yamagi Quake II OpenGL Refresher"
 #define MAX_LBM_HEIGHT 480
 #define BACKFACE_EPSILON 0.01
-#define DYNAMIC_LIGHT_WIDTH 128
-#define DYNAMIC_LIGHT_HEIGHT 128
 #define LIGHTMAP_BYTES 4
 #define MAX_LIGHTMAPS 128
 #define GL_LIGHTMAP_FORMAT GL_RGBA
@@ -95,7 +89,6 @@
 /* fall over */
 #define ROLL 2
 
-char *strlwr(char *s);
 extern viddef_t vid;
 
 /*
@@ -207,20 +200,13 @@ extern cvar_t *gl_drawworld;
 extern cvar_t *gl_speeds;
 extern cvar_t *gl_fullbright;
 extern cvar_t *gl_novis;
-extern cvar_t *gl_nocull;
 extern cvar_t *gl_lerpmodels;
 
 extern cvar_t *gl_lightlevel;
 extern cvar_t *gl_overbrightbits;
 
-extern cvar_t *gl_vertex_arrays;
-
-extern cvar_t *gl_ext_swapinterval;
-extern cvar_t *gl_ext_palettedtexture;
-extern cvar_t *gl_ext_multitexture;
-extern cvar_t *gl_ext_pointparameters;
-extern cvar_t *gl_ext_compiled_vertex_array;
-extern cvar_t *gl_ext_mtexcombine;
+extern cvar_t *gl_palettedtexture;
+extern cvar_t *gl_pointparameters;
 
 extern cvar_t *gl_particle_min_size;
 extern cvar_t *gl_particle_max_size;
@@ -229,10 +215,7 @@ extern cvar_t *gl_particle_att_a;
 extern cvar_t *gl_particle_att_b;
 extern cvar_t *gl_particle_att_c;
 
-extern cvar_t *gl_nosubimage;
-extern cvar_t *gl_bitdepth;
 extern cvar_t *gl_mode;
-
 extern cvar_t *gl_customwidth;
 extern cvar_t *gl_customheight;
 
@@ -245,25 +228,18 @@ extern cvar_t *gl_dynamic;
 extern cvar_t *gl_nobind;
 extern cvar_t *gl_round_down;
 extern cvar_t *gl_picmip;
-extern cvar_t *gl_skymip;
 extern cvar_t *gl_showtris;
 extern cvar_t *gl_finish;
 extern cvar_t *gl_ztrick;
 extern cvar_t *gl_zfix;
 extern cvar_t *gl_clear;
 extern cvar_t *gl_cull;
-extern cvar_t *gl_poly;
-extern cvar_t *gl_texsort;
 extern cvar_t *gl_polyblend;
 extern cvar_t *gl_flashblend;
-extern cvar_t *gl_lightmaptype;
 extern cvar_t *gl_modulate;
-extern cvar_t *gl_playermip;
 extern cvar_t *gl_drawbuffer;
-extern cvar_t *gl_3dlabs_broken;
 extern cvar_t *gl_swapinterval;
 extern cvar_t *gl_anisotropic;
-extern cvar_t *gl_anisotropic_avail;
 extern cvar_t *gl_texturemode;
 extern cvar_t *gl_texturealphamode;
 extern cvar_t *gl_texturesolidmode;
@@ -276,7 +252,6 @@ extern cvar_t *vid_gamma;
 
 extern cvar_t *intensity;
 
-extern int gl_lightmap_format;
 extern int gl_solid_format;
 extern int gl_alpha_format;
 extern int gl_tex_solid_format;
@@ -289,10 +264,8 @@ extern float r_world_matrix[16];
 
 void R_TranslatePlayerSkin(int playernum);
 void R_Bind(int texnum);
-void R_MBind(GLenum target, int texnum);
+
 void R_TexEnv(GLenum value);
-void R_EnableMultitexture(qboolean enable);
-void R_SelectTexture(GLenum);
 
 void R_LightPoint(vec3_t p, vec3_t color);
 void R_PushDlights(void);
@@ -370,17 +343,23 @@ void R_DrawParticles2(int n,
 
 typedef struct
 {
-	int renderer;
 	const char *renderer_string;
 	const char *vendor_string;
 	const char *version_string;
 	const char *extensions_string;
 
-	qboolean allow_cds;
-	qboolean mtexcombine;
+	int major_version;
+	int minor_version;
+
+	// ----
 
 	qboolean anisotropic;
-	qboolean tex_npot;
+	qboolean npottextures;
+	qboolean palettedtexture;
+	qboolean pointparameters;
+
+	// ----
+
 	float max_anisotropy;
 } glconfig_t;
 
@@ -397,6 +376,7 @@ typedef struct
 
 	int currenttextures[2];
 	int currenttmu;
+	GLenum currenttarget;
 
 	float camera_separation;
 	enum stereo_modes stereo_mode;

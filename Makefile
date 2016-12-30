@@ -44,6 +44,12 @@ WITH_OGG:=yes
 # installed
 WITH_OPENAL:=yes
 
+# Enables optional runtime loading of OpenAL (dlopen or
+# similar). If set to "no", the library is linked in at
+# compile time in the normal way. On Windows this option
+# is ignored, OpenAL is always loaded at runtime.
+DLOPEN_OPENAL:=yes
+
 # Use SDL2 instead of SDL1.2. Disables CD audio support,
 # because SDL2 has none. Use OGG/Vorbis music instead :-)
 # On Windows sdl-config isn't used, so make sure that
@@ -96,7 +102,7 @@ endif
 ifdef SystemRoot
 OSTYPE := Windows
 else
-OSTYPE := $(shell uname -s)
+OSTYPE ?= $(shell uname -s)
 endif
 
 # Special case for MinGW
@@ -106,20 +112,16 @@ endif
 
 # Detect the architecture
 ifeq ($(OSTYPE), Windows)
-# At this time only i386 is supported on Windows
-# (amd64 works, but building an 64 bit executable
-# is not that easy. Especially SDL and OpenAL are
-# somewhat problematic)
-ARCH ?= i386
+ifdef PROCESSOR_ARCHITEW6432
+# 64 bit Windows
+ARCH ?= $(PROCESSOR_ARCHITEW6432)
 else
-# Some platforms call it "amd64" and some "x86_64"
-ARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/amd64/x86_64/)
+# 32 bit Windows
+ARCH ?= $(PROCESSOR_ARCHITECTURE)
 endif
-
-# Refuse all other platforms as a firewall against PEBKAC
-# (You'll need some #ifdef for your unsupported  plattform!)
-ifeq ($(findstring $(ARCH), i386 x86_64 sparc64 ia64),)
-$(error arch $(ARCH) is currently not supported)
+else
+# Normalize some abiguous ARCH strings
+ARCH ?= $(shell uname -m | sed -e 's/i.86/i386/' -e 's/amd64/x86_64/' -e 's/^arm.*/arm/')
 endif
 
 # Disable CDA for SDL2
@@ -133,6 +135,7 @@ WITH_CDA:=no
 CDA_DISABLED:=yes
 endif
 endif
+
 
 # ----------
 
@@ -156,11 +159,22 @@ endif
 ifeq ($(OSTYPE), Darwin)
 CFLAGS := -O2 -fno-strict-aliasing -fomit-frame-pointer \
 		  -Wall -pipe -g -fwrapv
-		  #-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.5.sdk
 CFLAGS += $(OSX_ARCH)
 else
 CFLAGS := -O2 -fno-strict-aliasing -fomit-frame-pointer \
 		  -Wall -pipe -g -ggdb -MMD -fwrapv
+endif
+
+# ----------
+
+# Defines the operating system and architecture
+CFLAGS += -DYQ2OSTYPE=\"$(OSTYPE)\" -DYQ2ARCH=\"$(ARCH)\"
+
+# ----------
+
+# https://reproducible-builds.org/specs/source-date-epoch/
+ifdef SOURCE_DATE_EPOCH
+CFLAGS += -DBUILD_DATE=\"$(shell date --utc --date="@${SOURCE_DATE_EPOCH}" +"%b %_d %Y" | sed -e 's/ /\\ /g')\"
 endif
 
 # ----------
@@ -357,7 +371,7 @@ release/quake2.exe : LDFLAGS += -lvorbisfile -lvorbis -logg
 endif
 
 ifeq ($(WITH_OPENAL),yes)
-release/quake2.exe : CFLAGS += -DUSE_OPENAL -DDEFAULT_OPENAL_DRIVER='"openal32.dll"'
+release/quake2.exe : CFLAGS += -DUSE_OPENAL -DDEFAULT_OPENAL_DRIVER='"openal32.dll"' -DDLOPEN_OPENAL
 endif
 
 ifeq ($(WITH_ZIP),yes)
@@ -398,15 +412,20 @@ release/quake2 : LDFLAGS += -lvorbis -lvorbisfile -logg
 endif
 
 ifeq ($(WITH_OPENAL),yes)
+ifeq ($(DLOPEN_OPENAL),yes)
 ifeq ($(OSTYPE), OpenBSD)
-release/quake2 : CFLAGS += -DUSE_OPENAL -DDEFAULT_OPENAL_DRIVER='"libopenal.so"'
+release/quake2 : CFLAGS += -DUSE_OPENAL -DDEFAULT_OPENAL_DRIVER='"libopenal.so"' -DDLOPEN_OPENAL
 else ifeq ($(OSTYPE), Darwin)
-release/quake2 : CFLAGS += -DUSE_OPENAL -DDEFAULT_OPENAL_DRIVER='"libopenal.dylib"' -I/usr/local/opt/openal-soft/include
+release/quake2 : CFLAGS += -DUSE_OPENAL -DDEFAULT_OPENAL_DRIVER='"libopenal.dylib"' -I/usr/local/opt/openal-soft/include -DDLOPEN_OPENAL
 release/quake2 : LDFLAGS += -L/usr/local/opt/openal-soft/lib
 else
-release/quake2 : CFLAGS += -DUSE_OPENAL -DDEFAULT_OPENAL_DRIVER='"libopenal.so.1"'
+release/quake2 : CFLAGS += -DUSE_OPENAL -DDEFAULT_OPENAL_DRIVER='"libopenal.so.1"' -DDLOPEN_OPENAL
 endif
-endif
+else # !DLOPEN_OPENAL
+release/quake2 : CFLAGS += -DUSE_OPENAL -I/usr/local/opt/openal-soft/include
+release/quake2 : LDFLAGS += -lopenal -L/usr/local/opt/openal-soft/lib
+endif # !DLOPEN_OPENAL
+endif # WITH_OPENAL
 
 ifeq ($(WITH_ZIP),yes)
 release/quake2 : CFLAGS += -DZIP -DNOUNCRYPT

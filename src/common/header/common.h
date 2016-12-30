@@ -33,34 +33,19 @@
 #include "crc.h"
 
 /* Should have 4 characters. */
-#define YQ2VERSION "5.34pre"
-
+#define YQ2VERSION "6.01pre"
 #define BASEDIRNAME "baseq2"
 
-#if defined __linux__
- #define BUILDSTRING "Linux"
-#elif defined __FreeBSD__
- #define BUILDSTRING "FreeBSD"
-#elif defined __OpenBSD__
- #define BUILDSTRING "OpenBSD"
-#elif defined _WIN32
- #define BUILDSTRING "Windows"
-#elif defined __APPLE__
- #define BUILDSTRING "MacOS X"
-#else
- #define BUILDSTRING "Unknown"
+#ifndef YQ2OSTYPE
+#error YQ2OSTYPE should be defined by the build system
 #endif
 
-#ifdef __i386__
- #define CPUSTRING "i386"
-#elif defined __x86_64__
- #define CPUSTRING "amd64"
-#elif defined __sparc__
- #define CPUSTRING "sparc64"
-#elif defined __ia64__
- #define CPUSTRING "ia64"
-#else
- #define CPUSTRING "Unknown"
+#ifndef YQ2ARCH
+#error YQ2ARCH should be defined by the build system
+#endif
+
+#ifndef BUILD_DATE
+#define BUILD_DATE __DATE__
 #endif
 
 #ifdef _WIN32
@@ -78,7 +63,6 @@
 #else
  #define LIBGL "libGL.so.1"
 #endif
-
 
 /* ================================================================== */
 
@@ -700,7 +684,6 @@ void FS_InitFilesystem(void);
 void FS_SetGamedir(char *dir);
 char *FS_Gamedir(void);
 char *FS_NextPath(char *prevpath);
-void FS_ExecAutoexec(void);
 int FS_LoadFile(char *path, void **buffer);
 
 /* a null buffer will just return the file length without loading */
@@ -767,7 +750,7 @@ extern vec3_t bytedirs[NUMVERTEXNORMALS];
 /* this is in the client code, but can be used for debugging from server */
 void SCR_DebugGraph(float value, int color);
 
-/* NON-PORTABLE SYSTEM SERVICES */
+/* NON-PORTABLE OSTYPE SERVICES */
 
 void Sys_Init(void);
 void Sys_UnloadGame(void);
@@ -780,6 +763,7 @@ void Sys_Error(char *error, ...);
 void Sys_Quit(void);
 char *Sys_GetHomeDir(void);
 const char *Sys_GetBinaryDir(void);
+void Sys_Sleep(int msec);
 
 void Sys_FreeLibrary(void *handle);
 void *Sys_LoadLibrary(const char *path, const char *sym, void **handle);

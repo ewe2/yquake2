@@ -306,68 +306,6 @@ FS_GetFileByHandle(fileHandle_t f)
 }
 
 /*
- * Returns file size or -1 on error.
- */
-int
-FS_FOpenFileAppend(fsHandle_t *handle)
-{
-	char path[MAX_OSPATH];
-
-	FS_CreatePath(handle->name);
-
-	Com_sprintf(path, sizeof(path), "%s/%s", fs_gamedir, handle->name);
-
-	handle->file = fopen(path, "ab");
-
-	if (handle->file)
-	{
-		if (fs_debug->value)
-		{
-			Com_Printf("FS_FOpenFileAppend: '%s'.\n", path);
-		}
-
-		return FS_FileLength(handle->file);
-	}
-
-	if (fs_debug->value)
-	{
-		Com_Printf("FS_FOpenFileAppend: couldn't open '%s'.\n", path);
-	}
-
-	return -1;
-}
-
-/*
- * Always returns 0 or -1 on error.
- */
-int
-FS_FOpenFileWrite(fsHandle_t *handle)
-{
-	char path[MAX_OSPATH];
-
-	FS_CreatePath(handle->name);
-
-	Com_sprintf(path, sizeof(path), "%s/%s", fs_gamedir, handle->name);
-
-	if ((handle->file = fopen(path, "wb")) != NULL)
-	{
-		if (fs_debug->value)
-		{
-			Com_Printf("FS_FOpenFileWrite: '%s'.\n", path);
-		}
-
-		return 0;
-	}
-
-	if (fs_debug->value)
-	{
-		Com_Printf("FS_FOpenFileWrite: couldn't open '%s'.\n", path);
-	}
-
-	return -1;
-}
-
-/*
  * Other dll's can't just call fclose() on files returned by FS_FOpenFile.
  */
 void
@@ -1128,33 +1066,6 @@ FS_Path_f(void)
 #else
 	Com_Printf("%i files in PAK/PK2 files.\n", totalFiles);
 #endif
-}
-
-void
-FS_ExecAutoexec(void)
-{
-	char *dir;
-	char name[MAX_QPATH];
-
-	dir = (char *)Cvar_VariableString("gamedir");
-
-	if (dir[0] != '\0')
-	{
-		Com_sprintf(name, sizeof(name), "%s/%s/autoexec.cfg",
-				fs_basedir->string, dir);
-	}
-	else
-	{
-		Com_sprintf(name, sizeof(name), "%s/%s/autoexec.cfg",
-				fs_basedir->string, BASEDIRNAME);
-	}
-
-	if (Sys_FindFirst(name, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM) != NULL)
-	{
-		Cbuf_AddText("exec autoexec.cfg\n");
-	}
-
-	Sys_FindClose();
 }
 
 /*

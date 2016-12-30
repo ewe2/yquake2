@@ -1137,7 +1137,6 @@ CDShuffleFunc(void *unused)
         if (ogg->value)
         {
             OGG_ParseCmd("?");
-            OGG_Stop();
         }
     }
     else
@@ -1146,11 +1145,10 @@ CDShuffleFunc(void *unused)
 
         if (ogg->value)
         {
-            if ((int)strtol(cl.configstrings[CS_CDTRACK], (char **)NULL,
-                            10) < 10)
+            if ((int)strtol(cl.configstrings[CS_CDTRACK], (char **)NULL, 10) < 10)
             {
-                char tmp[2] = "0";
-                OGG_ParseCmd(strcat(tmp, cl.configstrings[CS_CDTRACK]));
+                char tmp[3] = {'0', cl.configstrings[CS_CDTRACK][0], '\0'};
+                OGG_ParseCmd(tmp);
             }
             else
             {
@@ -1696,7 +1694,7 @@ static const char *xatcredits[] =
     "Chris Toft",
     "Juan Valdes",
     "",
-    "+THANKS TO INTERGRAPH COMPUTER SYTEMS",
+    "+THANKS TO INTERGRAPH COMPUTER SYSTEMS",
     "+IN PARTICULAR:",
     "",
     "Michael T. Nicolaou",
@@ -3783,38 +3781,15 @@ extern char **FS_ListFiles(char *, int *, unsigned, unsigned);
 static qboolean
 PlayerConfig_ScanDirectories(void)
 {
-	char findname[1024];
 	char scratch[1024];
 	int ndirs = 0, npms = 0;
 	char **dirnames = NULL;
-	char *path = NULL;
 	int i;
 
 	s_numplayermodels = 0;
 
 	/* get a list of directories */
-	do
-	{
-		path = FS_NextPath(path);
-
-		/* If FS_NextPath returns NULL we get a SEGV on the next line.
-		   On other platforms this propably works (path becomes
-		   the null string or something like that). */
-		if (path == NULL)
-		{
-			break;
-		}
-
-		Com_sprintf(findname, sizeof(findname), "%s/players/*.*", path);
-
-		if ((dirnames = FS_ListFiles(findname, &ndirs, SFF_SUBDIR, 0)) != 0)
-		{
-			break;
-		}
-	}
-	while (path);
-
-	if (!dirnames)
+	if ((dirnames = FS_ListFiles2("players/*", &ndirs, SFF_SUBDIR, 0)) == NULL)
 	{
 		return false;
 	}
@@ -3833,6 +3808,7 @@ PlayerConfig_ScanDirectories(void)
 		char *a, *b, *c;
 		char **pcxnames;
 		char **skinnames;
+		fileHandle_t f;
 		int npcxfiles;
 		int nskins = 0;
 
@@ -3845,23 +3821,22 @@ PlayerConfig_ScanDirectories(void)
 		strcpy(scratch, dirnames[i]);
 		strcat(scratch, "/tris.md2");
 
-		if (!Sys_FindFirst(scratch, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM))
+		if (FS_FOpenFile(scratch, &f, false) == 0)
 		{
 			free(dirnames[i]);
 			dirnames[i] = 0;
-			Sys_FindClose();
 			continue;
 		}
-
-		Sys_FindClose();
+		else
+		{
+			FS_FCloseFile(f);
+		}
 
 		/* verify the existence of at least one pcx skin */
 		strcpy(scratch, dirnames[i]);
 		strcat(scratch, "/*.pcx");
-		pcxnames = FS_ListFiles(scratch, &npcxfiles,
-				0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM);
 
-		if (!pcxnames)
+		if ((pcxnames = FS_ListFiles2(scratch, &npcxfiles, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM)) == NULL)
 		{
 			free(dirnames[i]);
 			dirnames[i] = 0;
@@ -3941,10 +3916,8 @@ PlayerConfig_ScanDirectories(void)
 			c = b;
 		}
 
-		Q_strlcpy(s_pmi[s_numplayermodels].displayname, c + 1,
-				sizeof(s_pmi[s_numplayermodels].displayname));
-		Q_strlcpy(s_pmi[s_numplayermodels].directory, c + 1,
-				sizeof(s_pmi[s_numplayermodels].directory));
+		Q_strlcpy(s_pmi[s_numplayermodels].displayname, c + 1, sizeof(s_pmi[s_numplayermodels].displayname));
+		Q_strlcpy(s_pmi[s_numplayermodels].directory, c + 1, sizeof(s_pmi[s_numplayermodels].directory));
 
 		FreeFileList(pcxnames, npcxfiles);
 

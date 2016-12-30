@@ -26,9 +26,8 @@
  */
 
 #include <fcntl.h>
-#include <locale.h>
 #include <sys/types.h>
-#include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "../../common/header/common.h"
@@ -40,6 +39,7 @@ main(int argc, char **argv)
 	int time, oldtime, newtime;
 	int verLen, i;
 	const char* versionString;
+	struct timespec t;
 
 	/* register signal handler */
 	registerHandler();
@@ -110,8 +110,8 @@ main(int argc, char **argv)
 #endif
 #endif
 
-	printf("Platform: %s\n", BUILDSTRING);
-	printf("Architecture: %s\n", CPUSTRING);
+	printf("Platform: %s\n", YQ2OSTYPE);
+	printf("Architecture: %s\n", YQ2ARCH);
 
 	/* Seed PRNG */
 	randk_seed();
@@ -123,6 +123,7 @@ main(int argc, char **argv)
 	fcntl(fileno(stdin), F_SETFL, fcntl(fileno(stdin), F_GETFL, NULL) | FNDELAY);
 
 	oldtime = Sys_Milliseconds();
+	t.tv_sec = 0;
 
 	/* The legendary Quake II mainloop */
 	while (1)
@@ -130,6 +131,10 @@ main(int argc, char **argv)
 		/* find time spent rendering last frame */
 		do
 		{
+			/* Sleep 10 microseconds */
+			t.tv_nsec = 10000;
+			nanosleep(&t, NULL);
+
 			newtime = Sys_Milliseconds();
 			time = newtime - oldtime;
 		}
